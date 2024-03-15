@@ -126,6 +126,12 @@ except ImportError:
     def _set_non_inheritable_non_atomic(fd: int) -> None:  # noqa: ARG001
         """Dummy function for platforms that don't provide fcntl."""
 
+try:
+    from python_socks.sync import Proxy
+    from python_socks import ProxyType
+except ImportError:
+    Proxy = ProxyType = None
+
 
 _MAX_TCP_KEEPIDLE = 120
 _MAX_TCP_KEEPINTVL = 10
@@ -489,6 +495,7 @@ class PoolOptions:
         "__server_api",
         "__load_balanced",
         "__credentials",
+        "__proxy",
     )
 
     def __init__(
@@ -510,6 +517,7 @@ class PoolOptions:
         server_api: Optional[ServerApi] = None,
         load_balanced: Optional[bool] = None,
         credentials: Optional[MongoCredential] = None,
+        proxy: Optional[dict] = None,
     ):
         self.__max_pool_size = max_pool_size
         self.__min_pool_size = min_pool_size
@@ -529,6 +537,7 @@ class PoolOptions:
         self.__load_balanced = load_balanced
         self.__credentials = credentials
         self.__metadata = copy.deepcopy(_METADATA)
+        self.__proxy = copy.deepcopy(proxy)
         if appname:
             self.__metadata["application"] = {"name": appname}
 
@@ -687,6 +696,11 @@ class PoolOptions:
     def load_balanced(self) -> Optional[bool]:
         """True if this Pool is configured in load balanced mode."""
         return self.__load_balanced
+
+    @property
+    def proxy(self) -> Optional[dict]:
+        """Proxy settings, if configured"""
+        return self.__proxy
 
 
 class _CancellationContext:
@@ -1280,7 +1294,25 @@ def _create_connection(address: _Address, options: PoolOptions) -> socket.socket
             sock.settimeout(timeout)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, True)
             _set_keepalive_times(sock)
-            sock.connect(sa)
+            if proxy := options.proxy:
+                if Proxy is None:
+                    raise RuntimeError(
+                        "In order to use SOCKS5 proxy, python_socks must be installed. "
+                        "This can be done by re-installing pymongo with `pip install pymongo[socks]`"
+                    )
+                proxy_host = proxy['host']
+                proxy_port = proxy['port'] or 1080
+                sock.connect((proxy_host, proxy_port))
+                proxy = Proxy(
+                    ProxyType.SOCKS5,
+                    proxy_host,
+                    proxy_port,
+                    proxy['username'],
+                    proxy['password']
+                )
+                proxy.connect(sa[0], dest_port=sa[1], _socket=sock)
+            else:
+                sock.connect(sa)
             return sock
         except OSError as e:
             err = e

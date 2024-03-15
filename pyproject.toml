@@ -81,6 +81,7 @@ zstd = [
     "zstandard",
 ]
 test = ["pytest>=7"]
+socks = ["python-socks[asyncio]"]
 
 [project.urls]
 Homepage = "https://www.mongodb.org"

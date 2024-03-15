@@ -161,6 +161,16 @@ def _parse_pool_options(
     ssl_context, tls_allow_invalid_hostnames = _parse_ssl_options(options)
     load_balanced = options.get("loadbalanced")
     max_connecting = options.get("maxconnecting", common.MAX_CONNECTING)
+    if proxy_host := options.get("proxyHost"):
+        proxy = {
+            "host": proxy_host,
+            "port": options.get("proxyPort"),
+            "username": options.get("proxyUserName"),
+            "password": options.get("proxyPassword"),
+        }
+    else:
+        proxy = None
+
     return PoolOptions(
         max_pool_size,
         min_pool_size,
@@ -178,6 +188,7 @@ def _parse_pool_options(
         server_api=server_api,
         load_balanced=load_balanced,
         credentials=credentials,
+        proxy=proxy,
     )
 
 
